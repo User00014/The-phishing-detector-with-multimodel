@@ -1,0 +1,65 @@
+import torch
+from transformers import BertTokenizer, BertModel
+from bs4 import BeautifulSoup
+import requests
+from html import unescape
+import os
+import os.path as osp
+
+# 指定本地模型和分词器的路径（确保这是一个目录路径）
+local_model_dir = r'C:\Users\13488\Desktop\bert-base-uncased\bert-base-uncased'  # 使用原始字符串
+
+# 从本地加载分词器
+tokenizer = BertTokenizer.from_pretrained(local_model_dir)
+
+# 从本地加载模型
+model = BertModel.from_pretrained(local_model_dir)
+
+
+def extract_features_from_html(html_content):
+    # Parse HTML content and extract text
+    soup = BeautifulSoup(html_content, "html.parser")
+    text = soup.get_text()
+
+    # Decode HTML entities
+    text = unescape(text)
+
+    # Tokenize the text
+    tokens = tokenizer.encode(text, add_special_tokens=True)
+    tokens = tokens[:tokenizer.model_max_length]  # Ensure the input is within the model's max length
+
+    # Convert tokens to PyTorch tensor
+    input_ids = torch.tensor(tokens).unsqueeze(0)
+
+    # Forward pass, get hidden states
+    with torch.no_grad():
+        outputs = model(input_ids)
+
+    # Get the last hidden states
+    last_hidden_states = outputs.last_hidden_state
+
+    # 使用平均池化
+    mean_pooling = last_hidden_states.mean(dim=1)  # (1, 768)
+
+    return mean_pooling
+
+
+# Example HTML content
+html_path = r"C:\Users\13488\Desktop\test"
+html_list = os.listdir(html_path)
+
+# Extract features
+
+feature_arr = []
+for tmp_html in html_list:
+    with open(osp.join(html_path, tmp_html), 'r', encoding='utf-8') as file:
+        html_content = file.read()
+    features = extract_features_from_html(html_content)
+    print('tmp feature:{}'.format(features.shape))
+    feature_arr.append(features)
+
+feature_arr = torch.cat(feature_arr)
+print(feature_arr.shape)
+
+
+
